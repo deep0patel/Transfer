@@ -1,93 +1,149 @@
-import socketio
-import eventlet
+```
 import os
 import base64
+import socketio
+import eventlet
+import eventlet.wsgi
+from flask import Flask
 
-# Create a Socket.IO server
-sio = socketio.Server(cors_allowed_origins="*")
+#  Configuration
+PORT = 32044
+FALLBACK_SAVE_DIR = os.path.join(os.getcwd(), "bricks-files")
 
-# Default directory to save files
-DEFAULT_SAVE_DIR = os.path.join(os.getcwd(), "bricks-files")
-custom_save_dir = DEFAULT_SAVE_DIR  # Variable to hold the custom path
+#  Ensure fallback directory exists
+os.makedirs(FALLBACK_SAVE_DIR, exist_ok=True)
 
-# Ensure the default directory exists
-if not os.path.exists(DEFAULT_SAVE_DIR):
-    os.makedirs(DEFAULT_SAVE_DIR)
+# Initialize Flask and Socket.IO
+app = Flask(__name__)
+sio = socketio.Server(cors_allowed_origins="*", max_http_buffer_size=100 * 1024 * 1024)
+app.wsgi_app = socketio.WSGIApp(sio, app.wsgi_app)
 
-# Helper function to write files
-def save_file(file_path, content, is_base64=False):
-    # Ensure directory exists
-    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+# Global variable to store the custom path
+CURRENT_CUSTOM_PATH = FALLBACK_SAVE_DIR
 
-    # Write file content
-    mode = "wb" if is_base64 else "w"
-    with open(file_path, mode) as f:
-        if is_base64:
-            f.write(base64.b64decode(content))
-        else:
-            f.write(content)
+def sanitize_path(base_path, file_path):
+    """
+    Sanitize and validate the save path to prevent directory traversal
+    and ensure we're not writing outside of allowed directories.
+    """
+    # Remove leading slash if present
+    file_path = file_path.lstrip('/')
+    
+    # Normalize the path to remove any .. or .
+    base_path = os.path.normpath(base_path)
+    full_path = os.path.normpath(os.path.join(base_path, file_path))
+    
+    # Check if the full path is within the base path
+    if not full_path.startswith(os.path.normpath(base_path)):
+        raise ValueError(f"Invalid path: Cannot save outside of {base_path}")
+    
+    return full_path
 
-# Handle connection event
-@sio.event
+@sio.on('connect')
 def connect(sid, environ):
-    print(f"Figma plugin connected: {sid}")
-    sio.emit("pong", "pong", to=sid)
+    global CURRENT_CUSTOM_PATH
+    CURRENT_CUSTOM_PATH = FALLBACK_SAVE_DIR
+    print("Figma plugin connected")
+    sio.emit('pong', 'pong', room=sid)
 
-# Handle receiving a custom path
-@sio.event
-def sending_path(sid, custom_path):
-    global custom_save_dir
-    print(f"Custom path received: {custom_path}")
-    if os.path.isabs(custom_path):
-        custom_save_dir = custom_path
-    else:
-        print("Invalid custom path provided. Falling back to default.")
+@sio.on('sending-path')
+def handle_path(sid, custom_path):
+    global CURRENT_CUSTOM_PATH
+    CURRENT_CUSTOM_PATH = custom_path
+    print(f"Custom path received and stored: {CURRENT_CUSTOM_PATH}")
 
-# Handle code generation
-@sio.event
-def code_generation(sid, data):
-    global custom_save_dir
+@sio.on('code-generation')
+def handle_code_generation(sid, data):
+    global CURRENT_CUSTOM_PATH
+    
     try:
-        # Validate incoming data
-        if not data or not isinstance(data.get("files"), list):
-            print("Invalid data received")
-            return {"status": "error", "error": "Invalid data structure"}
+        # Validate input
+        if not data or 'files' not in data or not isinstance(data['files'], list):
+            sio.emit('code-generation-response', {
+                'status': 'error', 
+                'error': 'Invalid data'
+            }, room=sid)
+            return
 
-        files = data["files"]
+        # Use the globally stored custom path
+        base_path = CURRENT_CUSTOM_PATH
+        
+        # Ensure base path exists
+        os.makedirs(base_path, exist_ok=True)
 
-        # Use custom path if valid, otherwise fallback to default
-        save_dir = custom_save_dir if os.path.exists(custom_save_dir) else DEFAULT_SAVE_DIR
+        # Process and save files
+        saved_files = []
+        for file_data in data['files']:
+            file_content = file_data.get('content', '')
+            file_path = file_data.get('path', '')
 
-        for file in files:
-            file_content = file.get("content")
-            file_path = file.get("path")
+            try:
+                # Sanitize and get full save path
+                full_save_path = sanitize_path(base_path, file_path)
+                
+                # Ensure directory exists
+                os.makedirs(os.path.dirname(full_save_path), exist_ok=True)
 
-            if not file_content or not file_path:
-                print("Invalid file structure")
+                # Determine file type and decode accordingly
+                if file_path.lower().endswith('.svg'):
+                    # For SVG, check if it's base64 encoded and decode if necessary
+                    try:
+                        # Attempt to decode as base64
+                        file_content = base64.b64decode(file_content).decode('utf-8')
+                    except Exception:
+                        # If decoding fails, assume it's plain text
+                        pass
+                    
+                    # Write SVG content as text
+                    with open(full_save_path, 'w', encoding='utf-8') as f:
+                        f.write(file_content)
+
+                elif file_path.lower().endswith('.png'):
+                    # Decode base64 for PNG files
+                    file_content = base64.b64decode(file_content)
+                    with open(full_save_path, 'wb') as f:
+                        f.write(file_content)
+                else:
+                    # Write other files as plain text
+                    with open(full_save_path, 'w', encoding='utf-8') as f:
+                        f.write(file_content)
+
+                saved_files.append(full_save_path)
+                print(f"Saved file: {full_save_path}")
+
+            except (PermissionError, ValueError) as path_error:
+                print(f"Error saving file {file_path}: {path_error}")
+                sio.emit('code-generation-response', {
+                    'status': 'error', 
+                    'error': str(path_error)
+                }, room=sid)
                 continue
 
-            # Construct the full file save path
-            full_save_path = os.path.join(save_dir, file_path)
+        print(f"Files saved to {base_path}. Total saved: {len(saved_files)}")
+        sio.emit('code-generation-response', {
+            'status': 'ok', 
+            'savedFiles': saved_files
+        }, room=sid)
 
-            # Detect if content is base64-encoded
-            is_base64 = file_path.endswith((".png", ".svg"))
-            save_file(full_save_path, file_content, is_base64=is_base64)
-
-        print(f"Files saved successfully to {save_dir}")
-        return {"status": "ok"}
     except Exception as e:
         print(f"Error processing files: {e}")
-        return {"status": "error", "error": str(e)}
+        sio.emit('code-generation-response', {
+            'status': 'error', 
+            'error': str(e)
+        }, room=sid)
 
-# Handle disconnection
-@sio.event
+@sio.on('disconnect')
 def disconnect(sid):
-    print(f"Figma plugin disconnected: {sid}")
+    global CURRENT_CUSTOM_PATH
+    CURRENT_CUSTOM_PATH = FALLBACK_SAVE_DIR
+    print("Figma plugin disconnected")
 
-# Wrap the server with a WSGI app
-app = socketio.WSGIApp(sio)
-
-if __name__ == "__main__":
-    PORT = 32044
+def run_server():
     print(f"Server is running on http://localhost:{PORT}")
-    eventlet.wsgi.server(eventlet.listen(("0.0.0.0", PORT)), app)
+    print(f"Fallback save directory: {FALLBACK_SAVE_DIR}")
+    eventlet.wsgi.server(eventlet.listen(('', PORT)), app)
+
+if __name__ == '__main__':
+    run_server()
+
+```
