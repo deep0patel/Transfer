@@ -147,3 +147,97 @@ if __name__ == '__main__':
     run_server()
 
 ```
+
+# splitter
+
+```
+from bs4 import BeautifulSoup
+import uuid
+from collections import defaultdict
+
+def inline_to_external_css(html_path, output_html_path, css_output_path):
+    # Step 1: Parse HTML content
+    with open(html_path, 'r', encoding='utf-8') as file:
+        soup = BeautifulSoup(file.read(), "html.parser")
+
+    # Initialize CSS content and map to store unique styles
+    css_content = ""
+    style_map = defaultdict(list)  # Maps styles to classes
+    css_classes = {}  # Maps elements to assigned classes
+
+    # CSS reset for default HTML properties that could conflict with parent divs
+    reset_css = """
+    body, h1, h2, h3, h4, h5, h6, p, ul, ol, li, table, th, td, blockquote, hr, button, input, select, textarea, img {
+        margin: 0;
+        padding: 0;
+        border: 0;
+        outline: 0;
+        font-size: 100%;
+        vertical-align: baseline;
+        background: transparent;
+    }
+    img, video, svg {
+        max-width: 100%;
+        height: auto;
+    }
+    """
+
+    css_content += reset_css
+
+    # Step 2: Find all elements with inline styles
+    for element in soup.find_all(style=True):
+        inline_style = element["style"].strip()
+
+        # Check if this style has been used before
+        if inline_style in style_map:
+            # Use an existing class if the style matches
+            unique_class = style_map[inline_style][0]
+        else:
+            # Create a new unique class for this style
+            unique_class = f"class_{uuid.uuid4().hex[:8]}"
+            style_map[inline_style].append(unique_class)
+
+            # Add the CSS rule to the stylesheet content
+            css_content += f".{unique_class} {{ {inline_style} }}\n"
+
+        # Remove the inline style and apply the unique class
+        del element["style"]
+
+        # Merge with any existing classes
+        existing_classes = element.get("class", [])
+        element["class"] = existing_classes + [unique_class]
+
+    # Step 3: Save the modified HTML with link to the external CSS
+    # Convert the modified HTML to string
+    modified_html = str(soup)
+
+    # Add link to the new external CSS
+    modified_html = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Converted Page</title>
+    <link rel="stylesheet" href="./assets/styles.css">
+</head>
+<body>
+""" + modified_html + """
+</body>
+</html>
+"""
+
+    # Step 4: Write the CSS to a new file with UTF-8 encoding
+    with open(css_output_path, "w", encoding='utf-8') as css_file:
+        css_file.write(css_content)
+
+    # Step 5: Write the modified HTML to the output path with UTF-8 encoding
+    with open(output_html_path, "w", encoding='utf-8') as html_file:
+        html_file.write(modified_html)
+        
+    print(f"Conversion complete. HTML saved to {output_html_path}, CSS saved to {css_output_path}.")
+
+# Usage
+inline_to_external_css("./GeneratedComponent.html", "./mockup.html", "./assets/styles.css")
+
+```
