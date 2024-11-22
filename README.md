@@ -242,3 +242,100 @@ inline_to_external_css("./GeneratedComponent.html", "./mockup.html", "./assets/s
 
 ```
 https://teams.microsoft.com/l/meetup-join/19%3ameeting_MjA3OTI4NjUtODc4OS00NGFjLWJlZTAtY2M5MmIxN2ZlMmUw%40thread.v2/0?context=%7b%22Tid%22%3a%22404b1967-6507-45ab-8a6d-7374a3f478be%22%2c%22Oid%22%3a%2269230837-0af5-4c95-8a71-df527c50a22b%22%7d
+
+```import boto3
+import base64
+import json
+
+# if no cli or credentials cannot be confirmed in bmo environment use the code below
+"""bedrock = boto3.client(
+    service_name='bedrock-runtime',
+    region_name='us-east-1',  # Replace with your preferred region
+    aws_access_key_id='YOUR_ACCESS_KEY',
+    aws_secret_access_key='YOUR_SECRET_KEY'
+)"""
+bedrock = boto3.client(
+    service_name='bedrock-runtime',
+    region_name='us-east-1'
+)
+
+def encode_image(image_path):
+    with open(image_path, "rb") as image_file:
+        return base64.b64encode(image_file.read()).decode('utf-8')
+
+def generate_angular_code(html, CSS, image_path):
+    # Encode the image
+    base64_image = encode_image(image_path)
+
+    # Prepare the prompt
+    prompt = f"""
+    Given the following HTML and CSS code, and the attached Figma screen image,
+    please generate Angular code with interactions that implements this design:
+
+    HTML:
+    {html}
+
+    CSS:
+    {CSS}
+
+    Please analyze the provided Figma screen image and incorporate any additional
+    styling or layout details into the Angular components. Include appropriate
+    interactions based on common UI patterns visible in the image.
+
+    Provide the complete Angular component code, including the TypeScript class
+    with methods for interactions.
+    """
+
+    # Prepare the request body
+    body = json.dumps({
+        "prompt": prompt,
+        "max_tokens_to_sample": 4000,
+        "temperature": 0.5,
+        "top_p": 0.9,
+        "anthropic_version": "bedrock-2023-05-31",
+        "image": base64_image
+    })
+
+    # selecting model
+    response = bedrock.invoke_model(
+        body=body,
+        modelId='anthropic.claude-3-sonnet-20240229-v1:0',  # Use the appropriate model ID
+        contentType='application/json',
+        accept='application/json'
+    )
+
+    # parse and return the response
+    response_body = json.loads(response['body'].read())
+    return response_body['completion']
+
+# basic main, can be changed to import the files or select the directory later
+if __name__ == "__main__":
+    # Get user input for HTML/CSS
+    print("Enter your HTML code (press Enter twice to finish):")
+    html_line= []
+    while True:
+        line = input()
+        if line == "":
+            break
+        html_line.append(line)
+    html = "\n".join(html_line)
+
+    print("Enter your CSS code (press Enter twice to finish):")
+    CSS_line = []
+    while True:
+        line = input()
+        if line == "":
+            break
+        CSS_line.append(line)
+    css = "\n".join(CSS_line)
+    # Get user input for image path
+    image_path = input("Enter the path to your Figma screen image: ")
+
+    # Generate Angular code
+    try:
+        angular_code = generate_angular_code(html, css, image_path)
+        print("\nGenerated Angular Code:")
+        print(angular_code)
+    except Exception as e:
+        print(f"An error occurred: {str(e)}")
+```
