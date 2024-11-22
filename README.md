@@ -241,3 +241,4 @@ def inline_to_external_css(html_path, output_html_path, css_output_path):
 inline_to_external_css("./GeneratedComponent.html", "./mockup.html", "./assets/styles.css")
 
 ```
+https://teams.microsoft.com/l/meetup-join/19%3ameeting_MjA3OTI4NjUtODc4OS00NGFjLWJlZTAtY2M5MmIxN2ZlMmUw%40thread.v2/0?context=%7b%22Tid%22%3a%22404b1967-6507-45ab-8a6d-7374a3f478be%22%2c%22Oid%22%3a%2269230837-0af5-4c95-8a71-df527c50a22b%22%7d
