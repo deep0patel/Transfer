@@ -1,3 +1,34 @@
+```socket.on("sending-image", (pngFile) => {
+        try {
+            if (!pngFile || !pngFile.content || !pngFile.path) {
+                console.error("Invalid PNG file received");
+                return;
+            }
+
+            // Use custom path if provided, otherwise fallback to default
+            const basePath = customSavePath && fs.existsSync(customSavePath) ? customSavePath : SAVE_DIR;
+            const filePath = path.join(basePath, pngFile.path);
+
+            // Ensure directory exists
+            const fileDir = path.dirname(filePath);
+            if (!fs.existsSync(fileDir)) {
+                fs.mkdirSync(fileDir, {
+                    recursive: true
+                });
+            }
+
+            // Decode Base64 and save the file
+            const buffer = Buffer.from(pngFile.content, "base64");
+            fs.writeFileSync(filePath, buffer);
+
+            console.log(`PNG file saved at ${filePath}`);
+        } catch (err) {
+            console.error("Error saving PNG file:", err);
+        }
+    });```
+
+
+
 ```
 import os
 import base64
