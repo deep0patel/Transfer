@@ -385,3 +385,17 @@ CSS FILE
 The expected output is a fully functional website (HTML and CSS code) that is as similar as possible to the image provided. Little to no human intervention should be necessary to make the code similar to the image (assume that the user does not understand how to code, so make the code as accurate and extensive as necessary).
 
 </Output>```
+
+```const selectedNodes = figma.currentPage.selection;
+
+//       if (selectedNodes.length === 0) {
+//         throw new Error("No nodes selected.");
+//       }
+
+//       // Export the first selected node as PNG
+//       const pngExport = await selectedNodes[0].exportAsync({ format: "PNG" });
+//       const base64Png = Buffer.from(pngExport).toString("base64");
+//       const pngFile = {
+//         path: "selection.png",
+//         content: base64Png,
+//       };```
