@@ -339,3 +339,49 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"An error occurred: {str(e)}")
 ```
+```You are front end developer who excels at converting Figma design to given tech stack.  You are given 3 inputs and set of instructions you have to follow.
+
+
+<Instructions>
+
+Analyze the Design image given to you. Identify all the UI elements.
+
+Analyze the HTML and CSS file given to you.
+
+Follow the best UI development practice to generate new html and CSS file while keeping accessibility in mind making sure all elements are keyboard accessible and can be read through screen readers.
+
+New code should be extremely  responsive. be very careful not to change file paths or asset names.
+
+Change the class names in CSS to the appropriate names which follows naming conventions.
+
+All the UI element should be functioning to the extent where user can see it working.
+
+Make sure to keep the new generated code look exactly as the design given to you.
+
+</Instructions>
+
+<Input>
+
+HTML:
+
+"""
+
+HTML FILE
+
+"""
+
+CSS:
+
+"""
+
+CSS FILE
+
+"""
+
+</Input>
+
+<Output>
+
+The expected output is a fully functional website (HTML and CSS code) that is as similar as possible to the image provided. Little to no human intervention should be necessary to make the code similar to the image (assume that the user does not understand how to code, so make the code as accurate and extensive as necessary).
+
+</Output>```
