@@ -1,3 +1,144 @@
+
+```const express = require("express");
+const http = require("http");
+const {
+    Server
+} = require("socket.io");
+const fs = require("fs");
+const path = require("path");
+
+const PORT = 32044; // Replace with your desired port
+const app = express();
+const server = http.createServer(app);
+const io = new Server(server, {
+    maxHttpBufferSize: 1e8,
+    cors: {
+        origin: "*",
+    },
+});
+
+// Default directory to save files
+const SAVE_DIR = path.join(__dirname, "bricks-files");
+
+if (!fs.existsSync(SAVE_DIR)) {
+    fs.mkdirSync(SAVE_DIR, {
+        recursive: true
+    });
+}
+
+let customSavePath = ""; // Variable to store custom path
+
+io.on("connection", (socket) => {
+    console.log("Figma plugin connected");
+
+    socket.emit("pong", "pong");
+
+    // Handle custom path setting
+    socket.on("sending-path", (customPath) => {
+        console.log(`Custom path received: ${customPath}`);
+        customSavePath = customPath;
+    });
+
+    // Handle image saving
+    socket.on("sending-image", (pngFile) => {
+        try {
+            if (!pngFile || !pngFile.content || !pngFile.path) {
+                console.error("Invalid PNG file received");
+                return;
+            }
+
+            // Use custom path if provided, otherwise fallback to default
+            const basePath = customSavePath && fs.existsSync(customSavePath) ? customSavePath : SAVE_DIR;
+            const filePath = path.join(basePath, pngFile.path);
+
+            // Ensure directory exists
+            const fileDir = path.dirname(filePath);
+            if (!fs.existsSync(fileDir)) {
+                fs.mkdirSync(fileDir, {
+                    recursive: true
+                });
+            }
+
+            // Decode Base64 and save the file
+            const buffer = Buffer.from(pngFile.content, "base64");
+            fs.writeFileSync(filePath, buffer);
+
+            console.log(`PNG file saved at ${filePath}`);
+        } catch (err) {
+            console.error("Error saving PNG file:", err);
+        }
+    });
+
+    // Handle code generation file saving
+    socket.on("code-generation", async (data, callback) => {
+        try {
+            if (!data || !Array.isArray(data.files)) {
+                console.error("Invalid data received");
+                callback({
+                    status: "error",
+                    error: "Invalid data",
+                });
+                return;
+            }
+
+            const basePath = customSavePath && fs.existsSync(customSavePath) ? customSavePath : SAVE_DIR;
+
+            // Create directory if not exists
+            if (!fs.existsSync(basePath)) {
+                fs.mkdirSync(basePath, {
+                    recursive: true
+                });
+            }
+
+            // Process and save files
+            await Promise.all(
+                data.files.map(({
+                    content,
+                    path: filePath
+                }) => {
+                    const fileSavePath = path.join(basePath, filePath);
+                    const fileDir = path.dirname(fileSavePath);
+
+                    if (!fs.existsSync(fileDir)) {
+                        fs.mkdirSync(fileDir, {
+                            recursive: true
+                        });
+                    }
+
+                    const buffer =
+                        path.extname(filePath) === ".png" ?
+                        Buffer.from(content, "base64") :
+                        Buffer.from(content);
+                    fs.writeFileSync(fileSavePath, buffer);
+                })
+            );
+
+            console.log(`Files saved to ${basePath}`);
+            callback({
+                status: "ok",
+            });
+        } catch (err) {
+            console.error("Error processing files:", err);
+            callback({
+                status: "error",
+                error: err.message,
+            });
+        }
+    });
+
+    socket.on("disconnect", () => {
+        console.log("Figma plugin disconnected");
+    });
+});
+
+
+
+server.listen(PORT, () => {
+    console.log(`Server is running on http://localhost:${PORT}`);
+});```
+
+
+
 ```socket.on("sending-image", (pngFile) => {
         try {
             if (!pngFile || !pngFile.content || !pngFile.path) {
