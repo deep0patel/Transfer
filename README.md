@@ -1,4 +1,81 @@
+```import requests
+import json
+import os
 
+# Figma token configuration
+FIGMA_TOKEN = "use your figma token"  
+
+def fetch_figma_data(figma_token, file_id):
+    headers = {
+        'X-Figma-Token': figma_token
+    }
+    
+    response = requests.get(f'https://api.figma.com/v1/files/{file_id}', headers=headers)
+    if response.status_code == 200:
+        return response.json()
+    else:
+        print(f"Error: {response.status_code} - {response.text}")
+        return None
+
+def filter_trigger_events(children):
+    filtered = []
+    for child in children:
+        # Check if this item has trigger interactions
+        has_trigger = False
+        if 'interactions' in child:
+            for interaction in child['interactions']:
+                if 'trigger' in interaction:
+                    has_trigger = True
+                    break
+        
+        # Add item if it has triggers
+        if has_trigger:
+            filtered.append({
+                'id': child.get('id'),
+                'name': child.get('name'),
+                'type': child.get('type'),
+                'interactions': child['interactions']
+            })
+        
+        # Check child items
+        if 'children' in child:
+            filtered.extend(filter_trigger_events(child['children']))
+            
+    return filtered
+
+def process_figma_data(data, output_dir):
+    if not data or 'children' not in data:
+        print("Error: Invalid JSON structure")
+        return
+    
+    # Get filtered components
+    filtered_components = filter_trigger_events(data['children'])
+    
+    # Create output data
+    output_data = {
+        'components': filtered_components,
+        'count': len(filtered_components)
+    }
+    
+    # Save filtered data to new JSON
+    output_path = os.path.join(output_dir, 'filtered_triggers.json')
+    with open(output_path, 'w', encoding='utf-8') as outfile:
+        json.dump(output_data, outfile, indent=2)
+    print(f"Filtered trigger events saved to {output_path}")
+
+def main():
+    file_id = ""  # put your figma file id
+    output_dir = ""  # put where you want the output files
+    
+    # Fetch Figma data
+    figma_data = fetch_figma_data(FIGMA_TOKEN, file_id)
+    
+    if figma_data:
+        # Process and filter trigger events
+        process_figma_data(figma_data, output_dir)
+
+if __name__ == "__main__":
+    main()```
 ```const express = require("express");
 const http = require("http");
 const {
